@@ -128,7 +128,7 @@ def consume(topology, schemas, connection, access, connectionDocument=None, name
     """
     
     # Plausible check if SSL parameters are set
-    if (sslConnection is not None and (keyStore is None or keyStorePassword is None or trustStore is None or trustStorePassword is None):
+    if (sslConnection is not None and (keyStore is None or keyStorePassword is None or trustStore is None or trustStorePassword is None)):
         raise ValueError("If sslConnection is enabled, parameters 'keyStore', 'keyStorePassword', 'trustStore', and 'trustStorePassword' must be set, too.")
 
     _op = _JMSSource(topology, schemas=schemas, connection=connection, access=access, connectionDocument=connectionDocument, name=name)
@@ -140,7 +140,7 @@ def consume(topology, schemas, connection, access, connectionDocument=None, name
 
 
 
-def produce(stream, schema=None, connection, access, connectionDocument=None, name=None):
+def produce(stream, schema, connection, access, connectionDocument=None, name=None):
     """Send messages to a JMS broker.
 
     Args:
@@ -183,7 +183,7 @@ def produce(stream, schema=None, connection, access, connectionDocument=None, na
     """
     
     # Plausible check if SSL parameters are set
-    if (sslConnection is not None and (keyStore is None or keyStorePassword is None or trustStore is None or trustStorePassword is None):
+    if (sslConnection is not None and (keyStore is None or keyStorePassword is None or trustStore is None or trustStorePassword is None)):
         raise ValueError("If sslConnection is enabled, parameters 'keyStore', 'keyStorePassword', 'trustStore', and 'trustStorePassword' must be set, too.")
 
     _op = _JMSSink(stream, schema, connection=connection, access=access, connectionDocument=connectionDocument, name=name)
@@ -277,7 +277,7 @@ class _JMSSource(streamsx.spl.op.Invoke):
         if vmArg is not None:
             params['vmArg'] = vmArg
 
-        super(_JMSSource, self).__init__(topology, kind, inputs=None, schemas, params, name)
+        super(_JMSSource, self).__init__(topology, kind, inputs=None, schemas=schemas, params=params, name=name)
 
 
 

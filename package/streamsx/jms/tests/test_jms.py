@@ -45,6 +45,6 @@ class JMSBuildOnlyTest(TestCase):
         topo = Topology('test_buildonly_produce')
         txtMsgStream = op.Source(topo, 'spl.utility::Beacon', txtMsgSchema, params = {'period':0.3})
         txtMsgStream.msg = txtMsgStream.output("Message #" + 'IterationCount()')
-        jms.produce(txtMsgStream, connection="localActiveMQ", access="accessToTextMessages", connectionDocument="./connectionDocument.xml", name="JMS_Producer")
+        jms.produce(txtMsgStream, schema=None, connection="localActiveMQ", access="accessToTextMessages", connectionDocument="./connectionDocument.xml", name="JMS_Producer")
         self._build_only('test_buildonly_produce', topo)
 
