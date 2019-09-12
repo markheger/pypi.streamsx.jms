@@ -22,8 +22,7 @@ ToDo
 
 """
 
-__version__='0.1.0'
+__version__='0.2.0'
 
 __all__ = ['download_toolkit', 'produce', 'consume']
 from streamsx.jms._jms import download_toolkit, produce, consume
-

@@ -20,7 +20,7 @@ import json
 ##
 
 class JMSBuildOnlyTest(TestCase):
-    
+
     def _build_only(self, name, topo):
         result = streamsx.topology.context.submit("TOOLKIT", topo.graph) # creates tk* directory
         print(name + ' (TOOLKIT):' + str(result))
@@ -32,19 +32,21 @@ class JMSBuildOnlyTest(TestCase):
 
 
     def test_buildonly_consume(self):
-        txtMsgSchema = StreamSchema('tuple<rstring msg>')
+        txtmsg_schema = StreamSchema('tuple<rstring msg>')
+        path_to_connection_doc = os.getcwd() + "/streamsx/jms/tests/connectionDocument.xml"     # tests are supposed to be run from the package directory
         topo = Topology('test_buildonly_consume')
-        jmsTxtMsgStream = jms.consume(topo, schemas=txtMsgSchema, connection="localActiveMQ", access="accessToTextMessages", connectionDocument="./connectionDocument.xml", name="JMS_Consumer")
-        jmsTxtMsgStream.print()
+        txtmsg_stream = jms.consume(topo, schemas=txtmsg_schema, connection="localActiveMQ", access="accessToTextMessages", connection_document=path_to_connection_doc, name="JMS_Consumer")
+        #txtmsg_stream.print()
         self._build_only('test_buildonly_consume', topo)
 
 
 
     def test_buildonly_produce(self):
-        txtMsgSchema = StreamSchema('tuple<rstring msg>')
+        txtmsg_schema = StreamSchema('tuple<rstring msg>')
+        errmsg_schema = StreamSchema('tuple<rstring errorMessage>')
+        path_to_connection_doc = os.getcwd() + "/streamsx/jms/tests/connectionDocument.xml"     # tests are supposed to be run from the package directory
         topo = Topology('test_buildonly_produce')
-        txtMsgStream = op.Source(topo, 'spl.utility::Beacon', txtMsgSchema, params = {'period':0.3})
-        txtMsgStream.msg = txtMsgStream.output("Message #" + 'IterationCount()')
-        jms.produce(txtMsgStream, schema=None, connection="localActiveMQ", access="accessToTextMessages", connectionDocument="./connectionDocument.xml", name="JMS_Producer")
+        txtmsg_stream = op.Source(topo, 'spl.utility::Beacon', txtmsg_schema, params = {'period':0.3})
+        txtmsg_stream.msg = txtmsg_stream.output('"Message #" + (rstring)IterationCount()')
+#        jms.produce(stream=txtmsg_stream, schema=None, connection="localActiveMQ", access="accessToTextMessages", connection_document=path_to_connection_doc, name="JMS_Producer")
         self._build_only('test_buildonly_produce', topo)
-
