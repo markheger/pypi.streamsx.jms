@@ -33,10 +33,12 @@ class JMSBuildOnlyTest(TestCase):
 
     def test_buildonly_consume(self):
         txtmsg_schema = StreamSchema('tuple<rstring msg>')
+        errmsg_schema = StreamSchema('tuple<rstring errorMessage>')
         path_to_connection_doc = os.getcwd() + "/streamsx/jms/tests/connectionDocument.xml"     # tests are supposed to be run from the package directory
         topo = Topology('test_buildonly_consume')
-        txtmsg_stream = jms.consume(topo, schemas=txtmsg_schema, connection="localActiveMQ", access="accessToTextMessages", connection_document=path_to_connection_doc, name="JMS_Consumer")
-        #txtmsg_stream.print()
+        outputs = jms.consume(topo, schemas=[txtmsg_schema,errmsg_schema], connection="localActiveMQ", access="accessToTextMessages", connection_document=path_to_connection_doc, name="JMS_Consumer")
+        txtmsg_stream = outputs[0]
+        txtmsg_stream.print()
         self._build_only('test_buildonly_consume', topo)
 
 
@@ -46,7 +48,10 @@ class JMSBuildOnlyTest(TestCase):
         errmsg_schema = StreamSchema('tuple<rstring errorMessage>')
         path_to_connection_doc = os.getcwd() + "/streamsx/jms/tests/connectionDocument.xml"     # tests are supposed to be run from the package directory
         topo = Topology('test_buildonly_produce')
-        txtmsg_stream = op.Source(topo, 'spl.utility::Beacon', txtmsg_schema, params = {'period':0.3})
-        txtmsg_stream.msg = txtmsg_stream.output('"Message #" + (rstring)IterationCount()')
-#        jms.produce(stream=txtmsg_stream, schema=None, connection="localActiveMQ", access="accessToTextMessages", connection_document=path_to_connection_doc, name="JMS_Producer")
+        txtmsg_source = op.Source(topo, 'spl.utility::Beacon', txtmsg_schema, params = {'period':0.3}, name="DataGenerator")
+        txtmsg_source.msg = txtmsg_source.output('"Message #" + (rstring)IterationCount()')
+        txtmsg_stream = txtmsg_source.stream
+        txtmsg_stream.print()
+        errmsg_stream = jms.produce(stream=txtmsg_stream, schema=errmsg_schema, connection="localActiveMQ", access="accessToTextMessages", connection_document=path_to_connection_doc, name="JMS_Producer")
+        errmsg_stream.print()
         self._build_only('test_buildonly_produce', topo)

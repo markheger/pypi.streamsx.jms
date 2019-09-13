@@ -196,7 +196,7 @@ def produce(stream, schema, connection, access, connection_document=None,
         name(str): Source name in the Streams context, defaults to a generated name.
 
     Returns:
-        Optional output Stream with schema ???
+        Optional error output Stream with schema ???
     """
 
     # Plausibility check of SSL parameters
@@ -210,10 +210,12 @@ def produce(stream, schema, connection, access, connection_document=None,
                     consistentRegionQueueName=consistent_region_queue_name, maxMessageSendRetries=max_message_send_retries, messageSendRetryDelay=message_send_retry_delay, name=name)
 
     if connection_document is not None:
-        _op.params['connectionDocument'] = _op.expression('getThisToolkitDir() + "/' + _add_connection_document_file(topology, connection_document) + '"')
+        _op.params['connectionDocument'] = _op.expression('getThisToolkitDir() + "/' + _add_connection_document_file(stream.topology, connection_document) + '"')
 
     if schema is not None:
         return _op.outputs[0]
+        
+#   return _op.outputs[0]
 
 
 
@@ -313,8 +315,8 @@ class _JMSSink(streamsx.spl.op.Invoke):
 
         topology = stream.topology
         kind="com.ibm.streamsx.jms::JMSSink"
-        inputs=stream
-        schemas=schema
+        inputs=[stream]
+        schemas=[schema]
         params = dict()
 
         if connection is not None:
