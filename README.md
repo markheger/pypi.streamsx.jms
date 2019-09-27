@@ -67,5 +67,22 @@ python3 -u -m unittest streamsx.jms.tests.test_jms.JMSBuildOnlyTest
 
 
 
+### Standalone test
+
+Make sure that the streams environment is set and the environment variable:
+STREAMS_INSTALL is setup.
+
+Run the test with:
+
+    ant <???-to-be-defined-???>
+
+or
+
+```
+cd package
+python3 -u -m unittest streamsx.jms.tests.test_jms.JMSTxtMsgClassStandaloneTest
+```
+
+
 ### ToDo: add more tests and test descriptions
 
