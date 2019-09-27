@@ -5,6 +5,7 @@
 import os
 from tempfile import mkstemp
 import streamsx.spl.op
+import streamsx.spl.toolkit as toolkit
 import streamsx.spl.types
 from streamsx.topology.schema import CommonSchema, StreamSchema
 from streamsx.spl.types import rstring
@@ -38,6 +39,35 @@ def _add_connection_document_file(topology, connection_document):
         return topology.add_file_dependency(connection_document, 'etc')
     else:
         raise ValueError("Parameter connection document='" + str(connection_document) + "' does not point to an existing file.")
+
+
+
+def _add_java_class_libs(topology, java_class_libs):
+    location_root = "opt"
+    lib_paths_in_bundle = []
+
+    for libs_item in java_class_libs:
+        if os.path.isfile(libs_item):
+            location = location_root #+ os.path.dirname(libs_item)
+            lib_paths_in_bundle.append(topology.add_file_dependency(libs_item, location))
+
+        elif os.path.isdir(libs_item):
+            location = location_root #+ libs_item
+            file_added = False
+
+            for dir_entry in os.listdir(libs_item):
+                file_path = os.path.join(libs_item, dir_entry)
+                if os.path.isfile(file_path):
+                    topology.add_file_dependency(file_path, location)
+                    file_added = True
+
+            if file_added:
+                lib_paths_in_bundle.append(location)
+
+        else:
+            raise ValueError("The value '" + str(lib_item) + "' passed to parameter 'java_class_libs' does not point to an existing file or directory.")
+
+    return lib_paths_in_bundle
 
 
 
@@ -76,7 +106,7 @@ def download_toolkit(url=None, target_dir=None):
 
 
 
-def consume(topology, schemas, connection, access, connection_document=None,
+def consume(topology, schemas, java_class_libs, connection, access, connection_document=None,
             app_configuration_name=None, user_property_name=None, password_property_name=None,
             ssl_connection=None, ssl_debug=None, key_store=None, key_store_password=None, trust_store=None, trust_store_password=None,
             jms_destination_outattribute_name=None, jms_deliverymode_outattribute_name=None, jms_expiration_outattribute_name=None, jms_priority_outattribute_name=None,
@@ -86,8 +116,10 @@ def consume(topology, schemas, connection, access, connection_document=None,
     """Consume messages provided by a JMS broker.
 
     Args:
-        topology: The Streams topology.
-        schemas: The schemas of the output ports. There is the mandatory data output port containing the data of the received messages and an optional error output port. The latter expecting something like the ConsumerErrorOutputSchema.
+        topology(Topology): The Streams topology.
+        schemas(): The schemas of the output ports. There is the mandatory data output port containing the data of the received messages and an optional error output port. The latter expecting something like the ConsumerErrorOutputSchema.
+
+        java_class_libs(list str): Paths to JAR files containing the necessary classes to communicate with the JMS server. A single list entry may point to a JAR file or a directory.
 
         connection(str): This mandatory parameter identifies the name of the connection specification that contains an JMS element.
         access(str): This mandatory parameter identifies the access specification name.
@@ -132,30 +164,45 @@ def consume(topology, schemas, connection, access, connection_document=None,
         Optional Error Output Stream with schema :py:const:`~streamsx.jms.ConsumerErrorOutputSchema`.
     """
 
+    if(java_class_libs is None):
+        raise ValueError("You have to provide the paths to the Java class libraries.")
+
     # Plausibility check of SSL parameters
     if (ssl_connection is not None and (key_store is None or key_store_password is None or trust_store is None or trust_store_password is None)):
         raise ValueError("If ssl_connection is enabled, parameters 'key_store', 'key_store_password', 'trust_store', and 'trust_store_password' must be set, too.")
 
-    _op = _JMSSource(topology, schemas=schemas, connection=connection, access=access, connectionDocument=connection_document,
+    _op = _JMSSource(topology, schemas=schemas, classLibs=java_class_libs, connection=connection, access=access, connectionDocument=connection_document,
                     appConfigName=app_configuration_name, userPropName=user_property_name, passwordPropName=password_property_name,
                     sslConnection=ssl_connection, sslDebug=ssl_debug, keyStore=key_store, keyStorePassword=key_store_password, trustStore=trust_store, trustStorePassword=trust_store_password,
-                    jmsDestinationOutAttrName=jms_destination_outattribute_name, jmsDeliveryModeOutAttrName=jms_deliverymode_outattribute_name,
-                    jmsExpirationOutAttrName=jms_expiration_outattribute_name, jmsPriorityOutAttrName=jms_priority_outattribute_name,
-                    jmsMessageIDOutAttrName=jms_messageid_outattribute_name, jmsTimestampOutAttrName=jms_timestamp_outattribute_name,
-                    jmsCorrelationIDOutAttrName=jms_correlationid_outattribute_name, jmsReplyToOutAttrName=jms_replyto_outattribute_name,
-                    jmsTypeOutAttrName=jms_type_outattribute_name, jmsRedeliveredOutAttrName=jms_redelivered_outattribute_name,
-                    jmsHeaderProperties=jms_header_properties, jmsHeaderPropertiesOutAttrName=jms_header_properties_outattribute_name,
+                    jmsDestinationOutAttributeName=jms_destination_outattribute_name, jmsDeliveryModeOutAttributeName=jms_deliverymode_outattribute_name,
+                    jmsExpirationOutAttributeName=jms_expiration_outattribute_name, jmsPriorityOutAttributeName=jms_priority_outattribute_name,
+                    jmsMessageIDOutAttributeName=jms_messageid_outattribute_name, jmsTimestampOutAttributeName=jms_timestamp_outattribute_name,
+                    jmsCorrelationIDOutAttributeName=jms_correlationid_outattribute_name, jmsReplyToOutAttributeName=jms_replyto_outattribute_name,
+                    jmsTypeOutAttributeName=jms_type_outattribute_name, jmsRedeliveredOutAttributeName=jms_redelivered_outattribute_name,
+                    jmsHeaderProperties=jms_header_properties, jmsHeaderPropertiesOutAttributeName=jms_header_properties_outattribute_name,
                     messageSelector=message_selector, triggerCount=trigger_count, codepage=codepage, reconnectionPolicy=reconnection_policy,
                     reconnectionBound=reconnection_bound, period=period, name=name)
 
+    if(java_class_libs is not None):
+        bundled_class_lib_paths = _add_java_class_libs(topology, java_class_libs)
+        i = 0
+        class_libs_path_strings = ''
+        for path in bundled_class_lib_paths:
+            if i > 0:
+                class_libs_path_strings += ", "
+            i += 1
+            class_libs_path_strings += "'" + path + "'"
+        _op.params['classLibs'] = _op.expression(class_libs_path_strings)
+
+
     if connection_document is not None:
-        _op.params['connectionDocument'] = _op.expression('getThisToolkitDir() + "/' + _add_connection_document_file(topology, connection_document) + '"')
+        _op.params['connectionDocument'] = _op.expression("getThisToolkitDir() + '/" + _add_connection_document_file(topology, connection_document) + "'")
 
     return _op.outputs
 
 
 
-def produce(stream, schema, connection, access, connection_document=None,
+def produce(stream, schema, java_class_libs, connection, access, connection_document=None,
             app_configuration_name=None, user_property_name=None, password_property_name=None,
             ssl_connection=None, ssl_debug=None, key_store=None, key_store_password=None, trust_store=None, trust_store_password=None,
             jms_header_properties=None, codepage=None, reconnection_policy=None, reconnection_bound=None, period=None,
@@ -165,6 +212,8 @@ def produce(stream, schema, connection, access, connection_document=None,
     Args:
         stream: The input stream containing the data to send to the JMS broker
         schema: The schema of the optional error output port.
+
+        java_class_libs(list str): Paths to JAR files containing the necessary classes to communicate with the JMS server. A single list entry may point to a JAR file or a directory.
 
         connection(str): This mandatory parameter identifies the name of the connection specification that contains an JMS element.
         access(str): This mandatory parameter identifies the access specification name.
@@ -199,39 +248,59 @@ def produce(stream, schema, connection, access, connection_document=None,
         Optional error output Stream with schema ???
     """
 
+    if(java_class_libs is None):
+        raise ValueError("You have to provide the paths to the Java class libraries.")
+
     # Plausibility check of SSL parameters
     if (ssl_connection is not None and (key_store is None or key_store_password is None or trust_store is None or trust_store_password is None)):
         raise ValueError("If ssl_connection is enabled, parameters 'key_store', 'key_store_password', 'trust_store', and 'trust_store_password' must be set, too.")
 
-    _op = _JMSSink(stream, schema, connection=connection, access=access, connectionDocument=connection_document,
+    _op = _JMSSink(stream, schema, classLibs=java_class_libs, connection=connection, access=access, connectionDocument=connection_document,
                     appConfigName=app_configuration_name, userPropName=user_property_name, passwordPropName=password_property_name,
                     sslConnection=ssl_connection, sslDebug=ssl_debug, keyStore=key_store, keyStorePassword=key_store_password, trustStore=trust_store, trustStorePassword=trust_store_password,
                     jmsHeaderProperties=jms_header_properties, codepage=codepage, reconnectionPolicy=reconnection_policy, reconnectionBound=reconnection_bound, period=period,
                     consistentRegionQueueName=consistent_region_queue_name, maxMessageSendRetries=max_message_send_retries, messageSendRetryDelay=message_send_retry_delay, name=name)
 
+    if(java_class_libs is not None):
+        bundled_class_lib_paths = _add_java_class_libs(stream.topology, java_class_libs)
+        i = 0
+        class_libs_path_strings = ''
+        for path in bundled_class_lib_paths:
+            if i > 0:
+                class_libs_path_strings += ", "
+            i += 1
+            class_libs_path_strings += "'" + path + "'"
+        _op.params['classLibs'] = _op.expression(class_libs_path_strings)
+
     if connection_document is not None:
-        _op.params['connectionDocument'] = _op.expression('getThisToolkitDir() + "/' + _add_connection_document_file(stream.topology, connection_document) + '"')
+        _op.params['connectionDocument'] = _op.expression("getThisToolkitDir() + '/" + _add_connection_document_file(stream.topology, connection_document) + "'")
 
     if schema is not None:
         return _op.outputs[0]
-        
+
 #   return _op.outputs[0]
 
 
 
 class _JMSSource(streamsx.spl.op.Invoke):
-    def __init__(self, topology, schemas, connection=None, access=None, connectionDocument=None,
+    def __init__(self, topology, schemas, classLibs=None, connection=None, access=None, connectionDocument=None,
                  appConfigName=None, userPropName=None, passwordPropName=None,
                  sslConnection=None, sslDebug=None, keyStore=None, keyStorePassword=None, trustStore=None, trustStorePassword=None,
-                 jmsDestinationOutAttrName=None, jmsDeliveryModeOutAttrName=None, jmsExpirationOutAttrName=None, jmsPriorityOutAttrName=None,
-                 jmsMessageIDOutAttrName=None, jmsTimestampOutAttrName=None, jmsCorrelationIDOutAttrName=None, jmsReplyToOutAttrName=None,
-                 jmsTypeOutAttrName=None, jmsRedeliveredOutAttrName=None, jmsHeaderProperties=None, jmsHeaderPropertiesOutAttrName=None,
+                 jmsDestinationOutAttributeName=None, jmsDeliveryModeOutAttributeName=None, jmsExpirationOutAttributeName=None, jmsPriorityOutAttributeName=None,
+                 jmsMessageIDOutAttributeName=None, jmsTimestampOutAttributeName=None, jmsCorrelationIDOutAttributeName=None, jmsReplyToOutAttributeName=None,
+                 jmsTypeOutAttributeName=None, jmsRedeliveredOutAttributeName=None, jmsHeaderProperties=None, jmsHeaderPropertiesOutAttributeName=None,
                  messageSelector=None, triggerCount=None, codepage=None, reconnectionPolicy=None, reconnectionBound=None, period=None,
                  vmArg=None, name=None):
 
+        #toolkit.add_toolkit_dependency(topology, "streamsx.jms", "[2.0.0,10.0.0)")
+
         kind="com.ibm.streamsx.jms::JMSSource"
 
+
         params = dict()
+
+        if classLibs is not None:
+            params['classLibs'] = classLibs
 
         if connection is not None:
             params['connection'] = connection
@@ -260,30 +329,30 @@ class _JMSSource(streamsx.spl.op.Invoke):
         if trustStorePassword is not None:
             params['trustStorePassword'] = trustStorePassword
 
-        if jmsDestinationOutAttrName is not None:
-            params['jmsDestinationOutAttrName'] = jmsDestinationOutAttrName
-        if jmsDeliveryModeOutAttrName is not None:
-            params['jmsDeliveryModeOutAttrName'] = jmsDeliveryModeOutAttrName
-        if jmsExpirationOutAttrName is not None:
-            params['jmsExpirationOutAttrName'] = jmsExpirationOutAttrName
-        if jmsPriorityOutAttrName is not None:
-            params['jmsPriorityOutAttrName'] = jmsPriorityOutAttrName
-        if jmsMessageIDOutAttrName is not None:
-            params['jmsMessageIDOutAttrName'] = jmsMessageIDOutAttrName
-        if jmsTimestampOutAttrName is not None:
-            params['jmsTimestampOutAttrName'] = jmsTimestampOutAttrName
-        if jmsCorrelationIDOutAttrName is not None:
-            params['jmsCorrelationIDOutAttrName'] = jmsCorrelationIDOutAttrName
-        if jmsReplyToOutAttrName is not None:
-            params['jmsReplyToOutAttrName'] = jmsReplyToOutAttrName
-        if jmsTypeOutAttrName is not None:
-            params['jmsTypeOutAttrName'] = jmsTypeOutAttrName
-        if jmsRedeliveredOutAttrName is not None:
-            params['jmsRedeliveredOutAttrName'] = jmsRedeliveredOutAttrName
+        if jmsDestinationOutAttributeName is not None:
+            params['jmsDestinationOutAttributeName'] = jmsDestinationOutAttributeName
+        if jmsDeliveryModeOutAttributeName is not None:
+            params['jmsDeliveryModeOutAttributeName'] = jmsDeliveryModeOutAttributeName
+        if jmsExpirationOutAttributeName is not None:
+            params['jmsExpirationOutAttributeName'] = jmsExpirationOutAttributeName
+        if jmsPriorityOutAttributeName is not None:
+            params['jmsPriorityOutAttributeName'] = jmsPriorityOutAttributeName
+        if jmsMessageIDOutAttributeName is not None:
+            params['jmsMessageIDOutAttributeName'] = jmsMessageIDOutAttributeName
+        if jmsTimestampOutAttributeName is not None:
+            params['jmsTimestampOutAttributeName'] = jmsTimestampOutAttributeName
+        if jmsCorrelationIDOutAttributeName is not None:
+            params['jmsCorrelationIDOutAttributeName'] = jmsCorrelationIDOutAttributeName
+        if jmsReplyToOutAttributeName is not None:
+            params['jmsReplyToOutAttributeName'] = jmsReplyToOutAttributeName
+        if jmsTypeOutAttributeName is not None:
+            params['jmsTypeOutAttributeName'] = jmsTypeOutAttributeName
+        if jmsRedeliveredOutAttributeName is not None:
+            params['jmsRedeliveredOutAttributeName'] = jmsRedeliveredOutAttributeName
         if jmsHeaderProperties is not None:
             params['jmsHeaderProperties'] = jmsHeaderProperties
-        if jmsHeaderPropertiesOutAttrName is not None:
-            params['jmsHeaderPropertiesOutAttrName'] = jmsHeaderPropertiesOutAttrName
+        if jmsHeaderPropertiesOutAttributeName is not None:
+            params['jmsHeaderPropertiesOutAttributeName'] = jmsHeaderPropertiesOutAttributeName
 
         if messageSelector is not None:
             params['messageSelector'] = messageSelector
@@ -306,7 +375,7 @@ class _JMSSource(streamsx.spl.op.Invoke):
 
 
 class _JMSSink(streamsx.spl.op.Invoke):
-    def __init__(self, stream, schema=None, connection=None, access=None, connectionDocument=None,
+    def __init__(self, stream, schema=None, classLibs=None, connection=None, access=None, connectionDocument=None,
                  appConfigName=None, userPropName=None, passwordPropName=None,
                  sslConnection=None, sslDebug=None, keyStore=None, keyStorePassword=None, trustStore=None, trustStorePassword=None,
                  jmsHeaderProperties=None, codepage=None, reconnectionPolicy=None, reconnectionBound=None, period=None,
@@ -317,7 +386,13 @@ class _JMSSink(streamsx.spl.op.Invoke):
         kind="com.ibm.streamsx.jms::JMSSink"
         inputs=[stream]
         schemas=[schema]
+
+        #toolkit.add_toolkit_dependency(topology, "streamsx.jms", "[2.0.0,10.0.0)")
+
         params = dict()
+
+        if classLibs is not None:
+            params['classLibs'] = classLibs
 
         if connection is not None:
             params['connection'] = connection
