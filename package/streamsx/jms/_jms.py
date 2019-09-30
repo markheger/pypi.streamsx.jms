@@ -292,7 +292,7 @@ class _JMSSource(streamsx.spl.op.Invoke):
                  messageSelector=None, triggerCount=None, codepage=None, reconnectionPolicy=None, reconnectionBound=None, period=None,
                  vmArg=None, name=None):
 
-        #toolkit.add_toolkit_dependency(topology, "streamsx.jms", "[2.0.0,10.0.0)")
+        toolkit.add_toolkit_dependency(topology, "com.ibm.streamsx.jms", "[2.0.0,10.0.0)")
 
         kind="com.ibm.streamsx.jms::JMSSource"
 
@@ -387,7 +387,7 @@ class _JMSSink(streamsx.spl.op.Invoke):
         inputs=[stream]
         schemas=[schema]
 
-        #toolkit.add_toolkit_dependency(topology, "streamsx.jms", "[2.0.0,10.0.0)")
+        toolkit.add_toolkit_dependency(topology, "com.ibm.streamsx.jms", "[2.0.0,10.0.0)")
 
         params = dict()
 
