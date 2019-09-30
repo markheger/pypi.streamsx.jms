@@ -2,16 +2,16 @@ from unittest import TestCase
 
 import streamsx.jms as jms
 
-from streamsx.topology.topology import Topology
-from streamsx.topology.tester import Tester
-from streamsx.topology.schema import CommonSchema, StreamSchema
 import streamsx.spl.op as op
-import streamsx.spl.toolkit
-import streamsx.rest as sr
+import streamsx.spl.toolkit as toolkit
 
-import datetime
+from streamsx.topology.context import submit
+from streamsx.topology.schema import CommonSchema, StreamSchema
+from streamsx.topology.tester import Tester
+from streamsx.topology.topology import Topology
+
 import os
-import json
+
 
 ##
 ## Test assumptions
@@ -22,10 +22,10 @@ import json
 class JMSBuildOnlyTest(TestCase):
 
     def _build_only(self, name, topo):
-        result = streamsx.topology.context.submit("TOOLKIT", topo.graph) # creates tk* directory
+        result = submit("TOOLKIT", topo.graph) # creates tk* directory
         print(name + ' (TOOLKIT):' + str(result))
         assert(result.return_code == 0)
-        result = streamsx.topology.context.submit("BUNDLE", topo.graph)  # creates sab file
+        result = submit("BUNDLE", topo.graph)  # creates sab file
         print(name + ' (BUNDLE):' + str(result))
         assert(result.return_code == 0)
 
@@ -36,14 +36,13 @@ class JMSBuildOnlyTest(TestCase):
         errmsg_schema = StreamSchema('tuple<rstring errorMessage>')
 
         java_class_lib_paths = []
-        #java_class_lib_paths.append(os.getcwd() + "/streamsx/jms/tests/libs/activemq/lib")
-        #java_class_lib_paths.append(os.getcwd() + "/streamsx/jms/tests/libs/activemq/lib/optional")
         java_class_lib_paths.append("./streamsx/jms/tests/libs/activemq/lib")
         java_class_lib_paths.append("./streamsx/jms/tests/libs/activemq/lib/optional")
 
         path_to_connection_doc = "./streamsx/jms/tests/connectionDocument.xml"     # tests are supposed to be run from the package directory
 
         topo = Topology('buildonly_consume')
+        toolkit.add_toolkit(topo, "../../streamsx.jms/com.ibm.streamsx.jms")
         outputs = jms.consume(topo, schemas=[txtmsg_schema,errmsg_schema], java_class_libs=java_class_lib_paths, connection="localActiveMQ", access="accessToTextMessages", connection_document=path_to_connection_doc, name="JMS_Consumer")
         txtmsg_stream = outputs[0]
         txtmsg_stream.print()
@@ -62,6 +61,7 @@ class JMSBuildOnlyTest(TestCase):
         path_to_connection_doc = "./streamsx/jms/tests/connectionDocument.xml"     # tests are supposed to be run from the package directory
         
         topo = Topology('buildonly_produce')
+        toolkit.add_toolkit(topo, "../../streamsx.jms/com.ibm.streamsx.jms")
         txtmsg_source = op.Source(topo, 'spl.utility::Beacon', txtmsg_schema, params = {'period':0.3}, name="DataGenerator")
         txtmsg_source.msg = txtmsg_source.output('"Message #" + (rstring)IterationCount()')
         txtmsg_stream = txtmsg_source.stream
@@ -77,15 +77,15 @@ class JMSBuildOnlyTest(TestCase):
 class JMSTxtMsgClassStandaloneTest(TestCase):
 
     def _build_and_run_standalone(self, name, topo):
-        result = streamsx.topology.context.submit("TOOLKIT", topo.graph) # creates tk* directory
+        result = submit("TOOLKIT", topo.graph) # creates tk* directory
         print('\n' + name + ' (TOOLKIT):' + str(result))
         assert(result.return_code == 0)
 
-        result = streamsx.topology.context.submit("STANDALONE_BUNDLE", topo.graph)  # creates sab file
+        result = submit("STANDALONE_BUNDLE", topo.graph)  # creates sab file
         print('\n' + name + ' (STANDALONE_BUNDLE):' + str(result))
         assert(result.return_code == 0)
 
-        result = streamsx.topology.context.submit("STANDALONE", topo.graph)  # run application in standalone mode
+        result = submit("STANDALONE", topo.graph)  # run application in standalone mode
         print('\n' + name + ' (STANDALONE):' + str(result))
         assert(result.return_code == 0)
 
@@ -104,6 +104,8 @@ class JMSTxtMsgClassStandaloneTest(TestCase):
         path_to_connection_doc = "./streamsx/jms/tests/connectionDocument.xml"
 
         topo = Topology('text_message_class_standalone')
+
+        toolkit.add_toolkit(topo, "../../streamsx.jms/com.ibm.streamsx.jms")
 
         txtmsg_source = op.Source(topo, 'spl.utility::Beacon', txtmsg_schema, params = {'period':0.3, 'iterations':15}, name="DataGenerator")
         txtmsg_source.sent_msg = txtmsg_source.output('"My message #" + (rstring)IterationCount()')
