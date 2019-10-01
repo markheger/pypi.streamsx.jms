@@ -19,7 +19,7 @@ import os
 ## Streaming analytics service running
 ##
 
-class JMSBuildOnlyTest(TestCase):
+class JmsBuildOnlyTest(TestCase):
 
     def _build_only(self, name, topo):
         result = submit("TOOLKIT", topo.graph) # creates tk* directory
@@ -72,24 +72,10 @@ class JMSBuildOnlyTest(TestCase):
 
 
 
-class JMSTxtMsgClassStandaloneTest(TestCase):
+class TopologyProvider(object):
 
-    def _build_and_run_standalone(self, name, topo):
-        result = submit("TOOLKIT", topo.graph) # creates tk* directory
-        print('\n' + name + ' (TOOLKIT):' + str(result))
-        assert(result.return_code == 0)
-
-        result = submit("STANDALONE_BUNDLE", topo.graph)  # creates sab file
-        print('\n' + name + ' (STANDALONE_BUNDLE):' + str(result))
-        assert(result.return_code == 0)
-
-        result = submit("STANDALONE", topo.graph)  # run application in standalone mode
-        print('\n' + name + ' (STANDALONE):' + str(result))
-        assert(result.return_code == 0)
-
-
-
-    def test_text_message_class_standalone(self):
+    @staticmethod
+    def text_message_class_topology():
         txtmsg_schema = StreamSchema('tuple<rstring sent_msg>')
         received_txtmsg_schema = StreamSchema('tuple<rstring received_msg>')
         errmsg_schema = StreamSchema('tuple<rstring errorMessage>')
@@ -128,62 +114,45 @@ class JMSTxtMsgClassStandaloneTest(TestCase):
         received_txtmsg_stream = outputs[0]
         received_txtmsg_stream.print()
 
-        self._build_and_run_standalone('test_text_message_class_standalone', topo)
+        return topo
 
 
 
-class JMSTxtMsgClassDistributedTest(TestCase):
+class JmsTestDefinitions(TestCase):
 
-    def _build_and_run_distributed(self, name, topo):
-        result = submit("TOOLKIT", topo.graph) # creates tk* directory
-        print('\n' + name + ' (TOOLKIT):' + str(result))
-        assert(result.return_code == 0)
+    def test_text_message_class(self):
+        topology = TopologyProvider.text_message_class_topology()
+        self.tester = Tester(topology)
+        self.tester.run_for(60)
 
-        result = submit("DISTRIBUTED", topo.graph)  # run application in distributed mode
-        print('\n' + name + ' (DISTRIBUTED):' + str(result))
-        assert(result.return_code == 0)
+        # Add the local check
+        self.tester.local_check = self.local_checks
 
-
-
-    def test_text_message_class_distributed(self):
-        txtmsg_schema = StreamSchema('tuple<rstring sent_msg>')
-        received_txtmsg_schema = StreamSchema('tuple<rstring received_msg>')
-        errmsg_schema = StreamSchema('tuple<rstring errorMessage>')
+        # Run the test
+        self.tester.test(self.test_ctxtype, self.test_config)
 
 
-        java_class_lib_paths = []
-        java_class_lib_paths.append("./streamsx/jms/tests/libs/activemq/lib")
-        java_class_lib_paths.append("./streamsx/jms/tests/libs/activemq/lib/optional")
-
-        path_to_connection_doc = "./streamsx/jms/tests/connectionDocument.xml"
-
-        topo = Topology('text_message_class_distributed')
-
-        toolkit.add_toolkit(topo, "../../streamsx.jms/com.ibm.streamsx.jms")
-
-        txtmsg_source = op.Source(topo, 'spl.utility::Beacon', txtmsg_schema, params = {'period':0.3, 'iterations':15}, name="DataGenerator")
-        txtmsg_source.sent_msg = txtmsg_source.output('"My message #" + (rstring)IterationCount()')
-        txtmsg_stream = txtmsg_source.stream
-        txtmsg_stream.print()
-
-        errmsg_stream = jms.produce(stream=txtmsg_stream,
-                                    schema=errmsg_schema,
-                                    java_class_libs=java_class_lib_paths,
-                                    connection="localActiveMQ",
-                                    access="accessToSentTextMessages",
-                                    connection_document=path_to_connection_doc,
-                                    name="JMS_Producer")
-        errmsg_stream.print()
-
-        outputs = jms.consume(topo, schemas=[received_txtmsg_schema,errmsg_schema],
-                                    java_class_libs=java_class_lib_paths,
-                                    connection="localActiveMQ",
-                                    access="accessToReceivedTextMessages",
-                                    connection_document=path_to_connection_doc,
-                                    name="JMS_Consumer")
-        received_txtmsg_stream = outputs[0]
-        received_txtmsg_stream.print()
-
-        self._build_and_run_distributed('test_text_message_class_distributed', topo)
+    def local_checks(self):
+        job = self.tester.submission_result.job
+        self.assertEqual('healthy', job.health)
 
 
+
+class JmsStandaloneTest(JmsTestDefinitions):
+
+    def setUp(self):
+        Tester.setup_standalone(self)
+
+
+
+class JmsDistributedTest(JmsTestDefinitions):
+
+    def setUp(self):
+        Tester.setup_distributed(self)
+
+
+
+class JmsStreamingAnalyticsTest(JmsTestDefinitions):
+
+    def setUp(self):
+        Tester.setup_streaming_analytics(self)
