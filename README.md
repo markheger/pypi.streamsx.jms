@@ -67,5 +67,54 @@ python3 -u -m unittest streamsx.jms.tests.test_jms.JMSBuildOnlyTest
 
 
 
-### ToDo: add more tests and test descriptions
+### Standalone test
+
+Make sure that the streams environment is set and the environment variable:
+STREAMS_INSTALL is setup.
+
+Run the test with:
+
+    ant test-standalone
+
+or
+
+```
+cd package
+python3 -u -m unittest streamsx.jms.tests.test_jms.JmsStandaloneTest
+```
+
+
+
+### Distributed test
+
+Make sure that the streams environment is set and the environment variables:
+STREAMS_INSTALL, STREAMS_DOMAIN_ID, and STREAMS_INSTANCE_ID are setup.
+
+Run the test with:
+
+    ant test
+
+or
+
+```
+cd package
+python3 -u -m unittest streamsx.jms.tests.test_jms.JmsDistributedTest
+```
+
+
+
+### Streaming Analytics service
+
+Package can be tested with TopologyTester using the [Streaming Analytics](https://www.ibm.com/cloud/streaming-analytics) service.
+
+Run the test with:
+
+    ant test-sas
+
+or
+
+```
+cd package
+python3 -u -m unittest streamsx.jms.tests.test_jms.JmsStreamingAnalyticsTest
+```
 

@@ -46,6 +46,22 @@
             </native_schema>
         </access_specification>
         
+        <access_specification name="accessToSentTextMessages">
+            <destination identifier="dynamicQueues/TextMessageQueue" delivery_mode="non_persistent" message_class="text" />
+            <uses_connection connection="localActiveMQ" />
+            <native_schema>
+                <attribute name="sent_msg" type="String" />
+            </native_schema>
+        </access_specification>
+        
+        <access_specification name="accessToReceivedTextMessages">
+            <destination identifier="dynamicQueues/TextMessageQueue" delivery_mode="non_persistent" message_class="text" />
+            <uses_connection connection="localActiveMQ" />
+            <native_schema>
+                <attribute name="received_msg" type="String" />
+            </native_schema>
+        </access_specification>
+        
 	</access_specifications>
 
 
