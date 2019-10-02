@@ -1,16 +1,18 @@
-from unittest import TestCase
+import filecmp
+import os
 
 import streamsx.jms as jms
-
-import streamsx.spl.op as op
 import streamsx.spl.toolkit as toolkit
 
-from streamsx.topology.context import submit
+from streamsx.spl.op import Source, Sink
+from streamsx.topology.context import submit, ConfigParams
 from streamsx.topology.schema import CommonSchema, StreamSchema
 from streamsx.topology.tester import Tester
 from streamsx.topology.topology import Topology
 
-import os
+from unittest import TestCase
+
+
 
 
 ##
@@ -62,7 +64,7 @@ class JmsBuildOnlyTest(TestCase):
         
         topo = Topology('buildonly_produce')
         toolkit.add_toolkit(topo, "../../streamsx.jms/com.ibm.streamsx.jms")
-        txtmsg_source = op.Source(topo, 'spl.utility::Beacon', txtmsg_schema, params = {'period':0.3}, name="DataGenerator")
+        txtmsg_source = Source(topo, 'spl.utility::Beacon', txtmsg_schema, params = {'period':0.3}, name="DataGenerator")
         txtmsg_source.msg = txtmsg_source.output('"Message #" + (rstring)IterationCount()')
         txtmsg_stream = txtmsg_source.stream
         txtmsg_stream.print()
@@ -87,14 +89,16 @@ class TopologyProvider(object):
 
         path_to_connection_doc = "./streamsx/jms/tests/connectionDocument.xml"
 
-        topo = Topology('text_message_class_standalone')
+        topo = Topology('testtopo_text_message_class')
 
         toolkit.add_toolkit(topo, "../../streamsx.jms/com.ibm.streamsx.jms")
 
-        txtmsg_source = op.Source(topo, 'spl.utility::Beacon', txtmsg_schema, params = {'period':0.3, 'iterations':15}, name="DataGenerator")
+        txtmsg_source = Source(topo, 'spl.utility::Beacon', txtmsg_schema, params={'period':0.3, 'iterations':15}, name='DataGenerator')
         txtmsg_source.sent_msg = txtmsg_source.output('"My message #" + (rstring)IterationCount()')
         txtmsg_stream = txtmsg_source.stream
-        txtmsg_stream.print()
+        #txtmsg_stream.print()
+        #Sink('spl.adapter::FileSink', txtmsg_stream, params={'file':'expected.txt', 'format':'txt', 'flush':1}, name='TestDataDumper')
+        Sink('spl.adapter::FileSink', txtmsg_stream, params={'file':'/tmp/expected.txt'}, name='TestDataDumper')
 
         errmsg_stream = jms.produce(stream=txtmsg_stream,
                                     schema=errmsg_schema,
@@ -103,7 +107,8 @@ class TopologyProvider(object):
                                     access="accessToSentTextMessages",
                                     connection_document=path_to_connection_doc,
                                     name="JMS_Producer")
-        errmsg_stream.print()
+        #errmsg_stream.print()
+        Sink('spl.adapter::FileSink', errmsg_stream, params={'file':'/tmp/errors.txt'}, name='ErrorMsgDumper')
 
         outputs = jms.consume(topo, schemas=[received_txtmsg_schema,errmsg_schema],
                                     java_class_libs=java_class_lib_paths,
@@ -112,7 +117,55 @@ class TopologyProvider(object):
                                     connection_document=path_to_connection_doc,
                                     name="JMS_Consumer")
         received_txtmsg_stream = outputs[0]
-        received_txtmsg_stream.print()
+        #received_txtmsg_stream.print()
+        Sink('spl.adapter::FileSink', received_txtmsg_stream, params={'file':'/tmp/actual.txt'}, name='ReceivedDataDumper')
+
+        return topo
+
+
+    @staticmethod
+    def map_message_class_topology():
+        mapmsg_schema = StreamSchema('tuple<uint64 seqID, rstring msg>')
+        errmsg_schema = StreamSchema('tuple<rstring errorMessage>')
+
+
+        java_class_lib_paths = []
+        java_class_lib_paths.append("./streamsx/jms/tests/libs/activemq/lib")
+        java_class_lib_paths.append("./streamsx/jms/tests/libs/activemq/lib/optional")
+
+        path_to_connection_doc = "./streamsx/jms/tests/connectionDocument.xml"
+
+        topo = Topology('testtopo_map_message_class')
+
+        toolkit.add_toolkit(topo, "../../streamsx.jms/com.ibm.streamsx.jms")
+
+        mapmsg_source = Source(topo, 'spl.utility::Beacon', mapmsg_schema, params={'period':0.3, 'iterations':15}, name='DataGenerator')
+        mapmsg_source.seqID = mapmsg_source.output('IterationCount()')
+        mapmsg_source.msg = mapmsg_source.output('"My message #" + (rstring)IterationCount()')
+        mapmsg_stream = mapmsg_source.stream
+        #mapmsg_stream.print()
+        #Sink('spl.adapter::FileSink', mapmsg_stream, params={'file':'expected.txt', 'format':'txt', 'flush':1}, name='TestDataDumper')
+        Sink('spl.adapter::FileSink', mapmsg_stream, params={'file':'/tmp/expected.txt'}, name='TestDataDumper')
+
+        errmsg_stream = jms.produce(stream=mapmsg_stream,
+                                    schema=errmsg_schema,
+                                    java_class_libs=java_class_lib_paths,
+                                    connection="localActiveMQ",
+                                    access="accessToMapMessages",
+                                    connection_document=path_to_connection_doc,
+                                    name="JMS_Producer")
+        #errmsg_stream.print()
+        Sink('spl.adapter::FileSink', errmsg_stream, params={'file':'/tmp/errors.txt'}, name='ErrorMsgDumper')
+
+        outputs = jms.consume(topo, schemas=[mapmsg_schema,errmsg_schema],
+                                    java_class_libs=java_class_lib_paths,
+                                    connection="localActiveMQ",
+                                    access="accessToMapMessages",
+                                    connection_document=path_to_connection_doc,
+                                    name="JMS_Consumer")
+        received_mapmsg_stream = outputs[0]
+        #received_mapmsg_stream.print()
+        Sink('spl.adapter::FileSink', received_mapmsg_stream, params={'file':'/tmp/actual.txt'}, name='ReceivedDataDumper')
 
         return topo
 
@@ -130,6 +183,22 @@ class JmsTestDefinitions(TestCase):
 
         # Run the test
         self.tester.test(self.test_ctxtype, self.test_config)
+
+        self.assertTrue(filecmp.cmp('/tmp/expected.txt', '/tmp/actual.txt'))
+
+
+    def test_map_message_class(self):
+        topology = TopologyProvider.map_message_class_topology()
+        self.tester = Tester(topology)
+        self.tester.run_for(60)
+
+        # Add the local check
+        self.tester.local_check = self.local_checks
+
+        # Run the test
+        self.tester.test(self.test_ctxtype, self.test_config)
+
+        self.assertTrue(filecmp.cmp('/tmp/expected.txt', '/tmp/actual.txt'))
 
 
     def local_checks(self):
@@ -149,6 +218,10 @@ class JmsDistributedTest(JmsTestDefinitions):
 
     def setUp(self):
         Tester.setup_distributed(self)
+        print("Disabling SSL verification.")
+        self.test_config = {ConfigParams.SSL_VERIFY : False}
+        print("For DISTRIBUTED context: remember to set STREAMS_USERNAME and STREAMS_PASSWORD environment variables.")
+
 
 
 
