@@ -10,12 +10,6 @@ IBM Cloud and IBM Streams including IBM Cloud Pak for Data.
 * `IBM Streams developer community <https://developer.ibm.com/streamsdev/>`_
 
 
-Sample
-======
-
-ToDo
-
-
 Documentation
 =============
 
