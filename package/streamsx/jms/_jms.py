@@ -96,7 +96,7 @@ def download_toolkit(url=None, target_dir=None):
             If target_dir is ``None`` a location relative to the system temporary directory is chosen.
 
     Returns:
-        str: the location of the downloaded Avro toolkit
+        str: the location of the downloaded JMS toolkit
 
     .. note:: This function requires an outgoing Internet connection
     .. versionadded:: 0.1
