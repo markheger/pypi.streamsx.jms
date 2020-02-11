@@ -5,7 +5,7 @@ setup(
   packages = ['streamsx.jms'],
   include_package_data=True,
   version = streamsx.jms.__version__,
-  description = 'IBM Streams JMS integration',
+  description = 'JMS integration for IBM Streams',
   long_description = open('DESC.txt').read(),
   author = 'IBM Streams @ github.com',
   author_email = 'schulz2@de.ibm.com',
